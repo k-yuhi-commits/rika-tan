@@ -27,9 +27,11 @@ Linux でブラウザーのシステム依存がない場合は `python -m playw
 
 ```sh
 RIKA_SOURCE_REF=17c1acd7c27c6cedc58e8d2970f7544149d74cd6 \
-  python3 -m unittest discover -s tests -v
+  python3 -m unittest discover -s tests -p test_history.py -v
 ```
 
-比較元の Git オブジェクトが必要です。GitHub Actions は全履歴を取得してテストします。32 テストには、全5版の問題データ部分が比較元とバイト単位で同一であること、および現行740問＋ボス4問の件数確認も含みます。
+比較元の Git オブジェクトが必要です。GitHub Actions は全履歴を取得してテストします。履歴保護の32テストには、全5版の問題データ部分が比較元とバイト単位で同一であること、および現行740問＋ボス4問の件数確認も含みます。
+
+第2段階では入力判定の25テストを追加しました。通常の `unittest discover` は合計57テストを実行します。判定方針・修正前との比較方法は [入力判定の説明](docs/answer-validation.md)、問題ごとの条件は [311問の確認一覧](docs/input-answer-audit.md) を参照してください。
 
 保存形式、旧版URLの変更理由、比較結果、制限は [学習履歴保護の説明](docs/history-protection.md) を参照してください。

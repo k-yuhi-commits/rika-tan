@@ -1520,7 +1520,224 @@ function balancedGeneralTest(){
   return shuffle([...foundation,...advanced,...bs]);
 }
 function test(type){if(!storageWritable())return;if(READONLY_NEWER){alert('新しい保存データを保護するためテストを開始できません。');return;}if(type==='general'){sess={mode:'test',list:balancedGeneralTest(),i:0,correct:0,isTest:true,type,answers:[],combo:0,startExp:s.exp,originalLen:10,firstCorrect:0,retryQueued:{},shownAt:0};show('quiz');renderQ();return;}let p=qs;if(type==='field'){const chosen=document.getElementById('fieldTestSelect')?.value||field;p=qs.filter(q=>q.cat===chosen)}if(type==='unit'){const chosen=document.getElementById('unitTestSelect')?.value||qs.find(q=>q.cat===field)?.unit;p=qs.filter(q=>String(q.unit)===chosen)}if(type==='weak'){let w=qs.filter(q=>s.mistakes[q.id]&&!s.mistakes[q.id].overcome);p=w.length?w:qs}if(type==='unit'){const unitOnly=pickTargetedList(p,10);if(!unitOnly.length){alert('この単元には問題がありません。');return;}sess={mode:'test',list:unitOnly,i:0,correct:0,isTest:true,type,answers:[],combo:0,startExp:s.exp,originalLen:unitOnly.length,firstCorrect:0,retryQueued:{},shownAt:0};show('quiz');renderQ();return;}let chosenField=type==='field'?(document.getElementById('fieldTestSelect')?.value||field):field;let regular=shuffle(p),bossPool=type==='weak'?[]:shuffle(bosses.filter(b=>type==='general'||b.cat===chosenField));if(!bossPool.length)bossPool=shuffle(bosses);let target=Math.min(10,regular.length+Math.min(2,bossPool.length));let bossN=Math.min(2,bossPool.length,Math.max(1,Math.floor(target/5)));let regN=Math.max(1,target-bossN);let list=regular.slice(0,regN).concat(bossPool.slice(0,bossN));if(list.length<5){let extra=shuffle(qs.filter(q=>!list.some(x=>x.id===q.id))).slice(0,5-list.length);list=list.concat(extra)}sess={mode:'test',list:shuffle(list),i:0,correct:0,isTest:true,type,answers:[],combo:0,startExp:s.exp,originalLen:0,firstCorrect:0,retryQueued:{},shownAt:0};sess.originalLen=sess.list.length;show('quiz');renderQ()}
-function norm(v){return String(v).normalize('NFKC').trim().replace(/\s/g,'').toLowerCase().replace(/[ァ-ヶ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-96))}
+// Input grading rules are separate from the immutable question bank and history.
+// Unknown/reused IDs get exact, case-sensitive matching; never infer a formula
+// or a numeric tolerance from the appearance of an arbitrary answer.
+const INPUT_ANSWER_RULES=Object.create(null);
+function registerInputRules(kind,answers,options={}){
+ for(const [id,expected] of Object.entries(answers))INPUT_ANSWER_RULES[id]={kind,expected,...options};
+}
+registerInputRules("text",{
+ "1":"イオン","2":"電離","3":"中和","4":"イオン化傾向",
+ "5":"遺伝子","6":"減数分裂","7":"仕事","8":"仕事率",
+ "9":"慣性","10":"日周運動","11":"年周運動","12":"恒星",
+ "b004":"逆になる","b009":"O","b010":"変わらない","b011":"還元",
+ "b013":"水","b014":"緑色","b015":"表面積を大きくして水や無機養分を吸収しやすくする","b016":"蒸散",
+ "b017":"裸子植物","b018":"小腸","b019":"肺胞","b020":"感覚神経",
+ "b021":"同じ","b023":"菌類・細菌類など","b024":"初期微動","b025":"爆発的になりやすい",
+ "b026":"古い","b027":"北西から","b028":"広い範囲で比較的長く雨が続く","b029":"西から東",
+ "b030":"太陽に照らされた月の半球の見える割合が変わるから","b032":"振幅","b034":"電磁誘導","b039":"Mg",
+ "b040":"硫化鉄","b041":"酸化銅から酸素をうばう","b042":"銅","b043":"中和",
+ "b044":"赤色","b045":"気孔","b046":"二酸化炭素","b047":"シダ植物",
+ "b048":"口","b049":"肺静脈","b050":"反射","b051":"受精卵",
+ "b053":"一次消費者","b055":"流れやすい","b056":"粒が大きいもの","b057":"その気温の飽和水蒸気量",
+ "b058":"下がる","b059":"地軸が傾いている","b060":"反時計回り","b062":"振動数",
+ "b064":"流れない","b065":"加速する運動","b068":"溶質","b069":"鉄",
+ "b070":"水素","b071":"変わらない","b072":"陽イオンと陰イオン","b073":"塩化ナトリウム",
+ "b074":"ガラス棒","b075":"根毛","b076":"ヨウ素液","b077":"被子植物",
+ "b078":"アミラーゼ","b079":"左心室","b080":"せきずい","b083":"食物連鎖",
+ "b084":"初期微動継続時間","b085":"鉱物","b086":"火山灰層","b087":"凝結し始める",
+ "b088":"乱層雲","b089":"高い","b090":"太陽―地球―月","b091":"全反射",
+ "b094":"逆になる","b097":"水に浮く","b099":"マグネシウム","b102":"陰極",
+ "b103":"アルカリ性","b104":"酸性","b105":"気孔","b106":"気孔からの水蒸気の放出が妨げられるから",
+ "b107":"胚珠が子房に包まれていないから","b108":"リパーゼ","b109":"腎臓","b110":"せきずい",
+ "b111":"半分","b113":"分解者","b115":"大きく成長しやすい","b116":"粒が大きい砂",
+ "b118":"積乱雲","b119":"ほぼ同じ","b124":"逆向きになる","b129":"鉄",
+ "b134":"液面と同じ高さ","b135":"道管","b136":"デンプン","b137":"裸子植物",
+ "b138":"アミラーゼ","b139":"酸素","b140":"感覚神経","b143":"菌類・細菌類",
+ "b144":"P波","b145":"傾斜がゆるやかな形","b146":"示準化石","b147":"強くなりやすい",
+ "b148":"下がる","b149":"地軸が傾いたまま地球が公転するから","b150":"月が太陽と地球の間にある","b151":"法線に近づく",
+ "b154":"N極からS極","b156":"どちらも20J","b158":"エタノール","b159":"カルシウム",
+ "b161":"水素と結びついて水になる","b163":"赤色","b164":"水に溶けにくいから","b165":"師管",
+ "b166":"光を当てるかどうか","b167":"単子葉類","b168":"ペプシン","b169":"肺動脈",
+ "b170":"大脳","b171":"複製される","b173":"生産者","b175":"強くなりやすい",
+ "b176":"運ばれる間にぶつかり角が削られたから","b177":"気圧の差","b178":"冷気の上にはい上がる","b180":"地球が自転するから",
+ "b182":"高くなる","b184":"コイルを貫く磁界が変化するため","b189":"鉄","b190":"酸素",
+ "b192":"銅","b193":"水素イオン","b194":"緑色","b195":"根毛",
+ "b196":"葉緑体","b197":"裸子植物","b198":"栄養分を吸収する表面積が大きくなる","b199":"赤血球",
+ "b200":"脊髄","b202":"Aまたはa","b203":"菌類・細菌類","b204":"P波",
+ "b205":"双眼実体顕微鏡","b206":"大きい粒","b207":"北西から","b208":"乱層雲",
+ "b209":"火星","b210":"太陽に照らされた月の面の見え方が変わるため","b212":"高くなる","b213":"電源の電圧と等しい",
+ "b214":"N極","b215":"一定のまま","b218":"粒子として水の中に分散している","b219":"銅",
+ "b220":"等しい","b221":"還元","b222":"2個失う","b224":"アルカリ性",
+ "b225":"水や無機養分を吸収する表面積が増える","b226":"蒸散","b227":"ひげ根","b228":"気体交換をする表面積が大きくなる",
+ "b229":"血小板","b230":"感覚神経→中枢神経→運動神経","b231":"体細胞分裂","b232":"顕性形質",
+ "b233":"一次消費者","b234":"P波","b235":"地下で結晶が育ち、その後比較的急に冷える","b236":"下側",
+ "b237":"大きくなる","b238":"短時間に強い雨が降り、その後気温が下がる","b239":"水星と金星","b240":"太陽―月―地球",
+ "b241":"入射角が臨界角より大きいとき","b242":"音B","b244":"入れ替わる","b249":"鉄",
+ "b250":"酸化銅","b253":"アルカリ性","b254":"緑色","b255":"道管",
+ "b256":"水蒸気が葉の外へ出る","b257":"胞子でふえる","b258":"養分を吸収する表面積が大きくなる","b259":"赤血球",
+ "b260":"感覚神経","b261":"減数分裂","b263":"増える","b265":"小さい",
+ "b266":"砂","b268":"広い範囲で比較的弱い雨が続く","b269":"太陽に照らされた部分の見え方が変わるから","b274":"導線を中心とする同心円状",
+ "b279":"Cu","b282":"銅","b283":"水","b284":"酸性",
+ "b285":"道管","b286":"光を当てるかどうか","b287":"子房","b288":"養分を吸収する表面積を大きくする",
+ "b289":"収縮して下がる","b290":"筋肉","b291":"同じ","b292":"すべてAa",
+ "b293":"二酸化炭素","b294":"P波","b295":"マグマに含まれた気体が抜けた跡だから","b296":"示準化石",
+ "b297":"高気圧側から低気圧側","b298":"短時間の強い雨や気温の低下","b300":"太陽―地球―月"
+});
+registerInputRules("quantity",{
+ "b001":"40°","b031":"70°","b061":"35°","b121":"40°",
+ "b179":"55°","b181":"35°","b211":"35°","b271":"35°"
+},{"units":["°","度"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b002":"50Hz"
+},{"units":["Hz","ヘルツ"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b003":"20Ω","b033":"30Ω","b063":"20Ω","b093":"6Ω"
+},{"units":["Ω","オーム"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b005":"3m/s","b095":"5m/s","b125":"3m/s","b245":"4m/s"
+},{"units":["m/s","メートル毎秒"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b006":"20J","b036":"10J","b066":"60J","b126":"30J",
+ "b186":"30J","b246":"4J"
+},{"units":["J","ジュール"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b007":"3g/cm³","b037":"2.5g/cm³","b067":"2.7g/cm³","b127":"2.7g/cm³",
+ "b157":"2.5g/cm³","b217":"3.0g/cm³","b247":"2.7g/cm³","b277":"2.7g/cm³"
+},{"units":["g/cm³","g/cm3","g/cm^3"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b008":"10%","b098":"20%","b117":"60%","b267":"50%"
+},{"units":["%","パーセント"],"bare":false,"approx":false});
+registerInputRules("ions",{
+ "b012":"Na⁺とCl⁻","b132":"Na⁺とCl⁻","b133":"H⁺とOH⁻","b223":"H⁺とOH⁻"
+});
+registerInputRules("probability",{
+ "b022":"25%","b052":"1/4","b082":"1/2","b112":"1/4",
+ "b142":"50%","b172":"50%","b262":"1/2"
+});
+registerInputRules("quantity",{
+ "b035":"0.10秒","b054":"3秒","b114":"6秒","b174":"4秒",
+ "b264":"10秒","b275":"0.02秒"
+},{"units":["秒","s"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b038":"70g","b101":"20g","b131":"10.0g","b160":"10.0g",
+ "b187":"27g","b248":"5g","b278":"10g","b281":"11g"
+},{"units":["g","グラム"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b081":"2個","b141":"2個","b162":"2個","b201":"2個"
+},{"units":["個"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b092":"170m","b152":"680m","b272":"680m"
+},{"units":["m","メートル"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b096":"20W","b276":"6W"
+},{"units":["W","ワット"],"bare":false,"approx":false});
+registerInputRules("integer",{
+ "b100":"1","b130":"2"
+});
+registerInputRules("quantity",{
+ "b120":"29.5日","b270":"約29.5日"
+},{"units":["日"],"bare":false,"approx":true});
+registerInputRules("quantity",{
+ "b122":"1020m","b185":"12m"
+},{"units":["m","メートル"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b123":"0.30A","b153":"0.55A","b183":"0.5A","b273":"3A"
+},{"units":["A","アンペア"],"bare":false,"approx":false});
+registerInputRules("quantity",{
+ "b128":"16.7%","b188":"16.7%"
+},{"units":["%","パーセント"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b155":"0.40m/s"
+},{"units":["m/s","メートル毎秒"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b191":"2分子"
+},{"units":["分子"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b216":"60J"
+},{"units":["J","ジュール"],"bare":true,"approx":false});
+registerInputRules("quantity",{
+ "b243":"3.0V"
+},{"units":["V","ボルト"],"bare":false,"approx":false});
+registerInputRules("equation",{
+ "b251":"2H₂＋O₂→2H₂O","b280":"C＋O₂→CO₂"
+});
+registerInputRules("signed-integer",{
+ "b252":"−1"
+});
+// These alternatives were reviewed against each specific question's wording.
+const INPUT_ALIASES={
+ b076:['ヨウ素溶液'],b080:['脊髄'],b110:['脊髄'],b200:['せきずい'],
+ b202:['aまたはA'],b292:['全てAa'],b251:['O2+2H2->2H2O']
+};
+function exactInput(v){return String(v).normalize('NFC').trim()}
+function inputWidth(v){
+ // Fold only fullwidth ASCII, not Unicode superscripts/subscripts or SI prefixes.
+ return exactInput(v).replace(/[\uFF01-\uFF5E]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+}
+function japaneseInput(v){
+ return inputWidth(v).replace(/[\uFF61-\uFF9F]+/g,s=>s.normalize('NFKC'))
+  .replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96))
+  .replace(/([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー])\s+(?=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ーA-Za-z0-9])/gu,'$1')
+  .replace(/([A-Za-z0-9])\s+(?=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー])/gu,'$1');
+}
+function inputRule(q){
+ const rule=INPUT_ANSWER_RULES[String(q.id)];
+ return rule&&rule.expected===q.a?rule:null;
+}
+function decimalInput(v){
+ const t=inputWidth(v);if(t.length>64||!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(t))return null;
+ const negative=t.startsWith('-'),unsigned=t.replace(/^[-+]/,''),parts=unsigned.split('.');
+ return [BigInt((parts[0]||'0')+(parts[1]||''))*(negative?-1n:1n),10n**BigInt((parts[1]||'').length)];
+}
+function equalInputNumbers(a,b){return !!(a&&b&&a[0]*b[1]===b[0]*a[1])}
+function probabilityInput(v){
+ let t=inputWidth(v),percent=false;
+ if(t.endsWith('%')){percent=true;t=t.slice(0,-1).trim()}
+ let n;const fraction=t.match(/^(\d+)\s*\/\s*(\d+)$/),jp=t.match(/^(\d+)分の(\d+)$/);
+ if(fraction||jp){const m=fraction||jp;n=[BigInt(m[jp?2:1]),BigInt(m[jp?1:2])];if(n[1]===0n)return null}
+ else n=decimalInput(t);
+ if(!n)return null;if(percent)n=[n[0],n[1]*100n];
+ return n[0]>=0n&&n[0]<=n[1]?n:null;
+}
+function quantityInput(v,rule){
+ let t=inputWidth(v);if(rule.approx)t=t.replace(/^約\s*/,'');
+ const m=t.match(/^([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*(.*?)$/);
+ if(!m)return null;
+ const unit=japaneseInput(m[2]).replace(/\s*([/^])\s*/g,'$1');
+ if(unit===''?!rule.bare:!rule.units.some(u=>japaneseInput(u)===unit))return null;
+ return decimalInput(m[1]);
+}
+function equationInput(v){
+ return inputWidth(v).replace(/[₀-₉]/g,c=>String(c.charCodeAt(0)-0x2080))
+  .replace(/\s*(->|→|\+)\s*/g,(_,op)=>op==='→'?'->':op);
+}
+function ionPairInput(v){
+ const parts=inputWidth(v).replace(/⁺/g,'+').replace(/[⁻−]/g,'-').split(/\s*(?:と|および|、|,)\s*/);
+ return parts.length===2?parts.map(p=>p.trim()).sort().join('|'):null;
+}
+function validateInputAnswer(q,value){
+ const text=exactInput(value);if(!text||text.length>256)return false;
+ // Explicit acceptedAnswers remain supported without relaxing symbol case.
+ if([q.a,...(q.acceptedAnswers||[])].some(a=>text===exactInput(a)))return true;
+ const rule=inputRule(q);if(!rule)return false;
+ const variants=[q.a,...(INPUT_ALIASES[String(q.id)]||[])];
+ switch(rule.kind){
+  case 'text':return variants.some(a=>japaneseInput(value)===japaneseInput(a));
+  case 'quantity':return equalInputNumbers(quantityInput(value,rule),quantityInput(q.a,rule));
+  case 'probability':return equalInputNumbers(probabilityInput(value),probabilityInput(q.a));
+  case 'integer':case 'signed-integer':{
+   const t=inputWidth(value).replace(/−/g,'-');
+   const valid=rule.kind==='integer'?/^[1-9]\d*$/.test(t):/^-?\d+$/.test(t);
+   return valid&&equalInputNumbers(decimalInput(t),decimalInput(inputWidth(q.a).replace(/−/g,'-')));
+  }
+  case 'equation':return variants.some(a=>equationInput(value)===equationInput(a));
+  case 'ions':{const pair=ionPairInput(value);return pair!==null&&pair===ionPairInput(q.a)}
+  default:return false;
+ }
+}
+
 
 const KISO300_TITLES=["光", "音", "回路", "磁界", "物体の運動", "仕事", "いろいろな物質", "水溶液", "元素記号", "化学変化", "化学反応", "イオン", "酸・アルカリ", "指示薬", "植物のからだ", "植物のはたらき", "植物の分類", "動物のからだ", "動物のはたらき", "神経", "生殖", "遺伝", "生物のつながり", "地震", "火山", "地層", "気象", "前線", "惑星", "月"];
 function showKiso300(n){
@@ -1645,7 +1862,7 @@ function submitDraw(){
  const b=document.getElementById('drawSubmit');if(b)b.disabled=true;
 }
 
-function renderQ(){let q=sess.list[sess.i];sess.reasonRated=false;sess.awaitingReason=false;sess.reasonExplanationViewed=false;sess.hintUsed=false;sess.shownAt=Date.now();if(!q)return finish();feedback.classList.add('hidden');next.classList.add('hidden');modelabel.innerHTML=({choice:'4択',input:'入力',mixed:'今日の学習',scheduled:'今日の復習',weak:'苦手復習',boss:'ボス問題',test:'100点テスト',exam:'入試型トレーニング'}[sess.mode]||'学習')+(sess.i>=sess.originalLen&&!sess.isTest?' <span class="retrytag">定着チェック</span>':'');counter.textContent=`${sess.i+1}/${sess.list.length}`;qbar.style.width=(sess.i/sess.list.length*100)+'%';qbar.parentElement.setAttribute('role','progressbar');qbar.parentElement.setAttribute('aria-valuemin','0');qbar.parentElement.setAttribute('aria-valuemax',sess.list.length);qbar.parentElement.setAttribute('aria-valuenow',sess.i);let canType=!q.boss&&q.type!=='exam'&&String(q.a).length<=24;let inp=canType&&(sess.mode==='input'||(sess.mode==='mixed'&&sess.i%4===3)||(sess.isTest&&sess.i%5===4));let rev=!q.boss&&!inp&&q.term&&q.meaning&&Math.random()<.35;sess.expectedAnswer=q.a;if(q.drawTask){question.textContent=q.q;answerarea.innerHTML=renderDrawTask(q);initDrawTask()}else if(rev){sess.expectedAnswer=q.meaning;question.textContent=`「${q.term}」の意味として正しいものは？`;let pool=qs.filter(x=>x.id!==q.id&&x.meaning&&x.meaning!==q.meaning).sort((a,b)=>((b.cat===q.cat)*2+(b.unit===q.unit)*3)-((a.cat===q.cat)*2+(a.unit===q.unit)*3));let d=[...new Set(pool.map(x=>x.meaning))].slice(0,18);choices(shuffle([q.meaning,...sample(d,3)]),q.meaning)}else if(inp&&!q.boss){question.textContent=q.q;answerarea.innerHTML='<div class="inputrow"><input id="txt" autocomplete="off" spellcheck="false" aria-label="答えを入力"><button class="btn" onclick="submitInput()">答える</button></div><p class="note">数字・単位・用語を確認して入力。Enterでも解答できます。</p>';setTimeout(()=>{let t=document.getElementById('txt');if(t){t.focus();t.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();submitInput()}})}},0)}else{question.innerHTML=`<div>${esc(q.q)}</div>${renderDiagram(q)}${renderGraphs(q)}${renderEvidence(q)}${q.type==='exam'?`<div class="qmeta"><span>${esc(q.skill||'入試型')}</span>${q.patternClass?`<span class="examtag">${esc(q.patternClass)}</span>`:''}${q.referenceTopic&&(q.original===true||/^e(23[7-9]|24[0-9]|250)$/.test(String(q.id)))?`<span>${esc(q.referenceTopic)}</span>`:''}<span>${esc(q.freq?'参考 '+q.freq:'')}</span>${q.officialRate!=null&&Number.isFinite(Number(q.officialRate))?`<span>参考元設問の正答率 ${esc(q.officialRate)}%（別問題）</span>`:''}${Number.isFinite(q.referenceRate)?`<span>${esc(q.referenceKind||'参考元の得点率')} ${esc(q.referenceRate)}%（別問題）</span>`:''}</div>`:''}`;choices(shuffle([...new Set([q.a,...(q.c||[])])]),q.a)}if(q.hint&&!sess.isTest){let b=document.createElement('button');b.type='button';b.className='hintbutton';b.textContent='💡 考え方のヒント';b.setAttribute('aria-expanded','false');b.addEventListener('click',()=>showHint(b));answerarea.appendChild(b)}if(!document.getElementById('txt'))requestAnimationFrame(()=>{(document.getElementById('drawCanvas')||question).focus({preventScroll:true})});}function showHint(btn){const q=sess.list[sess.i];if(!q||!q.hint||sess.hintUsed)return;sess.hintUsed=true;btn.setAttribute('aria-expanded','true');btn.disabled=true;const p=document.createElement('p');p.className='hinttext';p.setAttribute('role','status');p.textContent=q.hint;answerarea.appendChild(p);let r=s.q[q.id]||{n:0,correct:0,wrong:0};r.hints=(r.hints||0)+1;s.q[q.id]=r;save()}function choices(a,correct){
+function renderQ(){let q=sess.list[sess.i];sess.reasonRated=false;sess.awaitingReason=false;sess.reasonExplanationViewed=false;sess.hintUsed=false;sess.shownAt=Date.now();if(!q)return finish();feedback.classList.add('hidden');next.classList.add('hidden');modelabel.innerHTML=({choice:'4択',input:'入力',mixed:'今日の学習',scheduled:'今日の復習',weak:'苦手復習',boss:'ボス問題',test:'100点テスト',exam:'入試型トレーニング'}[sess.mode]||'学習')+(sess.i>=sess.originalLen&&!sess.isTest?' <span class="retrytag">定着チェック</span>':'');counter.textContent=`${sess.i+1}/${sess.list.length}`;qbar.style.width=(sess.i/sess.list.length*100)+'%';qbar.parentElement.setAttribute('role','progressbar');qbar.parentElement.setAttribute('aria-valuemin','0');qbar.parentElement.setAttribute('aria-valuemax',sess.list.length);qbar.parentElement.setAttribute('aria-valuenow',sess.i);let canType=!q.boss&&q.type!=='exam'&&String(q.a).length<=24;let inp=canType&&(sess.mode==='input'||(sess.mode==='mixed'&&sess.i%4===3)||(sess.isTest&&sess.i%5===4));let rev=!q.boss&&!inp&&q.term&&q.meaning&&Math.random()<.35;sess.expectedAnswer=q.a;if(q.drawTask){question.textContent=q.q;answerarea.innerHTML=renderDrawTask(q);initDrawTask()}else if(rev){sess.expectedAnswer=q.meaning;question.textContent=`「${q.term}」の意味として正しいものは？`;let pool=qs.filter(x=>x.id!==q.id&&x.meaning&&x.meaning!==q.meaning).sort((a,b)=>((b.cat===q.cat)*2+(b.unit===q.unit)*3)-((a.cat===q.cat)*2+(a.unit===q.unit)*3));let d=[...new Set(pool.map(x=>x.meaning))].slice(0,18);choices(shuffle([q.meaning,...sample(d,3)]),q.meaning)}else if(inp&&!q.boss){question.textContent=q.q;answerarea.innerHTML='<div class="inputrow"><input id="txt" autocomplete="off" spellcheck="false" aria-label="答えを入力"><button class="btn" onclick="submitInput()">答える</button></div><p class="note">元素記号・単位の大文字と小文字を確認して入力。Enterでも解答できます。</p>';setTimeout(()=>{let t=document.getElementById('txt');if(t){t.focus();t.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){e.preventDefault();e.stopPropagation();submitInput()}})}},0)}else{question.innerHTML=`<div>${esc(q.q)}</div>${renderDiagram(q)}${renderGraphs(q)}${renderEvidence(q)}${q.type==='exam'?`<div class="qmeta"><span>${esc(q.skill||'入試型')}</span>${q.patternClass?`<span class="examtag">${esc(q.patternClass)}</span>`:''}${q.referenceTopic&&(q.original===true||/^e(23[7-9]|24[0-9]|250)$/.test(String(q.id)))?`<span>${esc(q.referenceTopic)}</span>`:''}<span>${esc(q.freq?'参考 '+q.freq:'')}</span>${q.officialRate!=null&&Number.isFinite(Number(q.officialRate))?`<span>参考元設問の正答率 ${esc(q.officialRate)}%（別問題）</span>`:''}${Number.isFinite(q.referenceRate)?`<span>${esc(q.referenceKind||'参考元の得点率')} ${esc(q.referenceRate)}%（別問題）</span>`:''}</div>`:''}`;choices(shuffle([...new Set([q.a,...(q.c||[])])]),q.a)}if(q.hint&&!sess.isTest){let b=document.createElement('button');b.type='button';b.className='hintbutton';b.textContent='💡 考え方のヒント';b.setAttribute('aria-expanded','false');b.addEventListener('click',()=>showHint(b));answerarea.appendChild(b)}if(!document.getElementById('txt'))requestAnimationFrame(()=>{(document.getElementById('drawCanvas')||question).focus({preventScroll:true})});}function showHint(btn){const q=sess.list[sess.i];if(!q||!q.hint||sess.hintUsed)return;sess.hintUsed=true;btn.setAttribute('aria-expanded','true');btn.disabled=true;const p=document.createElement('p');p.className='hinttext';p.setAttribute('role','status');p.textContent=q.hint;answerarea.appendChild(p);let r=s.q[q.id]||{n:0,correct:0,wrong:0};r.hints=(r.hints||0)+1;s.q[q.id]=r;save()}function choices(a,correct){
   const opts=[...new Set(a.filter(x=>x!==undefined&&x!==null))];
   answerarea.innerHTML='<div class="answers'+(opts.some(x=>String(x).length>36)?' long-options':'')+'">'+opts.map((x,i)=>`<button type="button" class="choice" data-key="${i+1}" aria-label="${i+1}番 ${esc(x)}"><span class="kbd">${i+1}</span> ${esc(x)}</button>`).join('')+'</div>';
   answerarea.querySelectorAll('.choice').forEach((b,i)=>{b.dataset.correct=String(opts[i]===correct);b.addEventListener('click',()=>pick(b,opts[i],correct))});
@@ -1656,7 +1873,7 @@ function pick(b,v,c){
   else b.classList.add('selected-answer');
   answer(v===c,v);
 }
-function submitInput(){let q=sess.list[sess.i],v=txt.value;if(!String(v).trim()){txt.focus();txt.setAttribute('aria-invalid','true');return}txt.removeAttribute('aria-invalid');answer([q.a,...(q.acceptedAnswers||[])].some(a=>norm(v)===norm(a)),v)}function answer(ok,user){if(!storageWritable()||READONLY_NEWER||!next.classList.contains('hidden'))return;const isRetry=!sess.isTest&&sess.i>=sess.originalLen;let q=sess.list[sess.i],rt=Math.max(0,Date.now()-(sess.shownAt||Date.now())),slow=rt>=12000;sess.masteryBefore=s.mastery[mkey(q)]||0;sess.masteryLastDayBefore=s.reviews[q.id]?.lastMasteryDay;sess.masteryWasRaised=false;sess.mistakeBefore=s.mistakes[q.id]?JSON.parse(JSON.stringify(s.mistakes[q.id])):null;sess.awaitingReason=!!(ok&&!sess.isTest);mark();s.total++;s.today++;let qr=s.q[q.id]||{n:0,correct:0,wrong:0};const firstEver=(qr.n===0);qr.n++;if(firstEver){qr.firstEverAt=Date.now();qr.firstEverIndependent=!!(ok&&!sess.hintUsed)}const previousSeen=Number(qr.lastSeen)||0;const spacedRecall=previousSeen>0&&Date.now()-previousSeen>=20*60*60*1000&&!isRetry;qr.lastSeen=Date.now();if(spacedRecall){qr.coldN=(qr.coldN||0)+1;if(ok&&!sess.hintUsed)qr.coldCorrect=(qr.coldCorrect||0)+1;qr.coldLastAt=Date.now()}if(ok)qr.correct++;else qr.wrong++;if(!isRetry){s.firstAttempts=(s.firstAttempts||0)+1;qr.firstN=(qr.firstN||0)+1;if(ok&&!sess.hintUsed){s.firstIndependentCorrect=(s.firstIndependentCorrect||0)+1;qr.firstCorrect=(qr.firstCorrect||0)+1}}s.q[q.id]=qr;if(ok){s.correct++;sess.correct++;if(!sess.isTest&&sess.i<sess.originalLen&&!sess.hintUsed)sess.firstCorrect++;sess.combo=sess.hintUsed?0:(sess.combo||0)+1;if(s.confidence[q.id]==='shaky'&&!slow)delete s.confidence[q.id];if(ok&&slow&&!sess.isTest)s.confidence[q.id]='slow';s.exp+=sess.isTest?5:(isRetry||sess.hintUsed)?3:10;if(!sess.isTest&&sess.combo>0&&sess.combo%5===0){s.exp+=10;s.life=Math.min(5,s.life+1)}if(!sess.isTest&&!isRetry&&!sess.hintUsed){const rec=s.reviews[q.id]||{};if(rec.lastMasteryDay!==D()){s.mastery[mkey(q)]=Math.min(3,(s.mastery[mkey(q)]||0)+1);sess.masteryWasRaised=s.mastery[mkey(q)]>sess.masteryBefore;rec.lastMasteryDay=D();s.reviews[q.id]=rec;right(q)}}}else{sess.combo=0;s.life=Math.max(0,s.life-1);s.mastery[mkey(q)]=Math.max(0,(s.mastery[mkey(q)]||0)-1);wrong(q,user);if(!sess.isTest&&!sess.retryQueued[q.id]){sess.retryQueued[q.id]=true;sess.list.push(q)}}review(q,isRetry?false:(ok&&!sess.hintUsed));if(sess.hintUsed&&ok){s.confidence[q.id]='shaky';if(s.reviews[q.id])s.reviews[q.id].due=Math.min(s.reviews[q.id].due,Date.now()+10*60*1000)}if(sess.isTest)sess.answers.push({id:q.id,cat:q.cat,ok:ok,user:String(user),expected:String(sess.expectedAnswer||q.a)});document.querySelectorAll('.choice').forEach(b=>b.disabled=true);let t=document.getElementById('txt');if(t)t.disabled=true;feedback.classList.remove('hidden');feedback.innerHTML=ok?`⭕ <b>正解！</b>${sess.hintUsed?'<span class="retrytag">ヒント使用：短期復習へ・習熟度は据え置き</span>':''}${sess.combo>=2?` <span class="tag">⚡ ${sess.combo}連続正解</span>`:''}<div class="reason-prompt">🧠 まず理由を自分の言葉で説明 → 解説を開いて照合しよう。</div><label class="reason-scratch-label" for="reasonScratch">考えた根拠を1文で書いてみよう（任意・保存しません）</label><textarea id="reasonScratch" class="reason-scratch" maxlength="180" rows="2" placeholder="資料のどこを使った？　どんな計算・条件から結論を出した？"></textarea><details class="reason-details"><summary>📖 解説・根拠を確認する</summary>${qExplanation(q)}</details><small>説明できたかを自己評価してから次へ進もう。理由を確認せず次へ進むと、習熟度は加点せず10分後に復習します。</small><br><span class="tag">習熟度：${mlabel(s.mastery[mkey(q)])}</span>${isRetry?'<br><span class="retrytag">再挑戦で正解。5分後にもう一度復習すると定着しやすくなります。</span>':''}${ok&&slow&&!sess.isTest?'<br><span class="retrytag">⏱ 正解ですが12秒以上 → 早めに再確認</span>':''}${!sess.isTest?'<div class="reason-rating" aria-label="正解の理由を説明できたか"><button type="button" id="reasonYesBtn" class="btn alt" onclick="rateReason(true)" disabled aria-describedby="reasonStatus">✓ 解説と照合できた</button><button type="button" id="reasonNoBtn" class="btn warn" onclick="rateReason(false)">↻ 理由があやしい・10分後に復習</button></div><span id="reasonStatus" class="reason-status" role="status"></span>':''}${!sess.isTest&&sess.combo>0&&sess.combo%5===0?'<br><span class="tag">🎁 5連続ボーナス +10 EXP・ライフ回復</span>':''}`:`❌ <b>不正解</b><br>あなたの答え：${esc(user)}<br>正解：<b>${esc(sess.expectedAnswer||q.a)}</b><br>${qExplanation(q)}<br><span class="tag">間違いノートに記録</span>${!sess.isTest&&sess.retryQueued[q.id]?'<br><span class="retrytag">このセットの最後でもう一度出題します</span>':''}${!sess.isTest?'<div class="cause-box"><b>どこでつまずいた？（任意）</b><div class="cause-buttons"><button type="button" class="cause-btn" onclick="setErrorCause(\'知識\')">知識</button><button type="button" class="cause-btn" onclick="setErrorCause(\'資料読解\')">資料読解</button><button type="button" class="cause-btn" onclick="setErrorCause(\'計算\')">計算</button><button type="button" class="cause-btn" onclick="setErrorCause(\'条件・読み違い\')">条件・読み違い</button><button type="button" class="cause-btn" onclick="setErrorCause(\'考察・根拠\')">考察・根拠</button><button type="button" class="cause-btn" onclick="setErrorCause(\'作図\')">作図</button></div><small>記録すると間違いノートで振り返れます。</small></div>':''}`;if(sess.isTest){feedback.innerHTML='<span class="test-locked" role="status">✓ 回答を記録しました。正答・解説はテスト終了後にまとめて確認できます。</span>'; }if(ok&&!sess.isTest){const details=feedback.querySelector('.reason-details');
+function submitInput(){let q=sess.list[sess.i],v=txt.value;if(!String(v).trim()){txt.focus();txt.setAttribute('aria-invalid','true');return}txt.removeAttribute('aria-invalid');answer(validateInputAnswer(q,v),v)}function answer(ok,user){if(!storageWritable()||READONLY_NEWER||!next.classList.contains('hidden'))return;const isRetry=!sess.isTest&&sess.i>=sess.originalLen;let q=sess.list[sess.i],rt=Math.max(0,Date.now()-(sess.shownAt||Date.now())),slow=rt>=12000;sess.masteryBefore=s.mastery[mkey(q)]||0;sess.masteryLastDayBefore=s.reviews[q.id]?.lastMasteryDay;sess.masteryWasRaised=false;sess.mistakeBefore=s.mistakes[q.id]?JSON.parse(JSON.stringify(s.mistakes[q.id])):null;sess.awaitingReason=!!(ok&&!sess.isTest);mark();s.total++;s.today++;let qr=s.q[q.id]||{n:0,correct:0,wrong:0};const firstEver=(qr.n===0);qr.n++;if(firstEver){qr.firstEverAt=Date.now();qr.firstEverIndependent=!!(ok&&!sess.hintUsed)}const previousSeen=Number(qr.lastSeen)||0;const spacedRecall=previousSeen>0&&Date.now()-previousSeen>=20*60*60*1000&&!isRetry;qr.lastSeen=Date.now();if(spacedRecall){qr.coldN=(qr.coldN||0)+1;if(ok&&!sess.hintUsed)qr.coldCorrect=(qr.coldCorrect||0)+1;qr.coldLastAt=Date.now()}if(ok)qr.correct++;else qr.wrong++;if(!isRetry){s.firstAttempts=(s.firstAttempts||0)+1;qr.firstN=(qr.firstN||0)+1;if(ok&&!sess.hintUsed){s.firstIndependentCorrect=(s.firstIndependentCorrect||0)+1;qr.firstCorrect=(qr.firstCorrect||0)+1}}s.q[q.id]=qr;if(ok){s.correct++;sess.correct++;if(!sess.isTest&&sess.i<sess.originalLen&&!sess.hintUsed)sess.firstCorrect++;sess.combo=sess.hintUsed?0:(sess.combo||0)+1;if(s.confidence[q.id]==='shaky'&&!slow)delete s.confidence[q.id];if(ok&&slow&&!sess.isTest)s.confidence[q.id]='slow';s.exp+=sess.isTest?5:(isRetry||sess.hintUsed)?3:10;if(!sess.isTest&&sess.combo>0&&sess.combo%5===0){s.exp+=10;s.life=Math.min(5,s.life+1)}if(!sess.isTest&&!isRetry&&!sess.hintUsed){const rec=s.reviews[q.id]||{};if(rec.lastMasteryDay!==D()){s.mastery[mkey(q)]=Math.min(3,(s.mastery[mkey(q)]||0)+1);sess.masteryWasRaised=s.mastery[mkey(q)]>sess.masteryBefore;rec.lastMasteryDay=D();s.reviews[q.id]=rec;right(q)}}}else{sess.combo=0;s.life=Math.max(0,s.life-1);s.mastery[mkey(q)]=Math.max(0,(s.mastery[mkey(q)]||0)-1);wrong(q,user);if(!sess.isTest&&!sess.retryQueued[q.id]){sess.retryQueued[q.id]=true;sess.list.push(q)}}review(q,isRetry?false:(ok&&!sess.hintUsed));if(sess.hintUsed&&ok){s.confidence[q.id]='shaky';if(s.reviews[q.id])s.reviews[q.id].due=Math.min(s.reviews[q.id].due,Date.now()+10*60*1000)}if(sess.isTest)sess.answers.push({id:q.id,cat:q.cat,ok:ok,user:String(user),expected:String(sess.expectedAnswer||q.a)});document.querySelectorAll('.choice').forEach(b=>b.disabled=true);let t=document.getElementById('txt');if(t)t.disabled=true;feedback.classList.remove('hidden');feedback.innerHTML=ok?`⭕ <b>正解！</b>${sess.hintUsed?'<span class="retrytag">ヒント使用：短期復習へ・習熟度は据え置き</span>':''}${sess.combo>=2?` <span class="tag">⚡ ${sess.combo}連続正解</span>`:''}<div class="reason-prompt">🧠 まず理由を自分の言葉で説明 → 解説を開いて照合しよう。</div><label class="reason-scratch-label" for="reasonScratch">考えた根拠を1文で書いてみよう（任意・保存しません）</label><textarea id="reasonScratch" class="reason-scratch" maxlength="180" rows="2" placeholder="資料のどこを使った？　どんな計算・条件から結論を出した？"></textarea><details class="reason-details"><summary>📖 解説・根拠を確認する</summary>${qExplanation(q)}</details><small>説明できたかを自己評価してから次へ進もう。理由を確認せず次へ進むと、習熟度は加点せず10分後に復習します。</small><br><span class="tag">習熟度：${mlabel(s.mastery[mkey(q)])}</span>${isRetry?'<br><span class="retrytag">再挑戦で正解。5分後にもう一度復習すると定着しやすくなります。</span>':''}${ok&&slow&&!sess.isTest?'<br><span class="retrytag">⏱ 正解ですが12秒以上 → 早めに再確認</span>':''}${!sess.isTest?'<div class="reason-rating" aria-label="正解の理由を説明できたか"><button type="button" id="reasonYesBtn" class="btn alt" onclick="rateReason(true)" disabled aria-describedby="reasonStatus">✓ 解説と照合できた</button><button type="button" id="reasonNoBtn" class="btn warn" onclick="rateReason(false)">↻ 理由があやしい・10分後に復習</button></div><span id="reasonStatus" class="reason-status" role="status"></span>':''}${!sess.isTest&&sess.combo>0&&sess.combo%5===0?'<br><span class="tag">🎁 5連続ボーナス +10 EXP・ライフ回復</span>':''}`:`❌ <b>不正解</b><br>あなたの答え：${esc(user)}<br>正解：<b>${esc(sess.expectedAnswer||q.a)}</b><br>${qExplanation(q)}<br><span class="tag">間違いノートに記録</span>${!sess.isTest&&sess.retryQueued[q.id]?'<br><span class="retrytag">このセットの最後でもう一度出題します</span>':''}${!sess.isTest?'<div class="cause-box"><b>どこでつまずいた？（任意）</b><div class="cause-buttons"><button type="button" class="cause-btn" onclick="setErrorCause(\'知識\')">知識</button><button type="button" class="cause-btn" onclick="setErrorCause(\'資料読解\')">資料読解</button><button type="button" class="cause-btn" onclick="setErrorCause(\'計算\')">計算</button><button type="button" class="cause-btn" onclick="setErrorCause(\'条件・読み違い\')">条件・読み違い</button><button type="button" class="cause-btn" onclick="setErrorCause(\'考察・根拠\')">考察・根拠</button><button type="button" class="cause-btn" onclick="setErrorCause(\'作図\')">作図</button></div><small>記録すると間違いノートで振り返れます。</small></div>':''}`;if(sess.isTest){feedback.innerHTML='<span class="test-locked" role="status">✓ 回答を記録しました。正答・解説はテスト終了後にまとめて確認できます。</span>'; }if(ok&&!sess.isTest){const details=feedback.querySelector('.reason-details');
  if(details)details.addEventListener('toggle',()=>{if(details.open){sess.reasonExplanationViewed=true;const yes=document.getElementById('reasonYesBtn');if(yes&&!sess.reasonRated)yes.disabled=false;const status=document.getElementById('reasonStatus');if(status&&!sess.reasonRated)status.textContent='自分の説明と解説を比べ、合っていれば「解説と照合できた」を選ぼう。';}});
  }next.classList.remove('hidden');next.focus();save()}function setErrorCause(cause){
   const q=sess.list[sess.i];if(!q||!s.mistakes[q.id]||next.classList.contains('hidden'))return;
